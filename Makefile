@@ -1,8 +1,8 @@
 PROGRAM  := ipcam-client
 
-SOURCES = main.c
+SOURCES = main.c utils.c
 
-CFLAGS   := -Wall -O2 -g
+CFLAGS   := -I. -Wall -O2 -g
 LFLAGS   :=
 
 OBJECTS := $(patsubst %.c, %.o, $(SOURCES))
