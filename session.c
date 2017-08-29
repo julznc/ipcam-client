@@ -28,6 +28,24 @@ session_context_t *new_session(const char *host, const char *port)
         return NULL;
     }
 
+    struct timeval timeout;
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+
+    if (setsockopt(sc->sock_fd, SOL_SOCKET, SO_RCVTIMEO,
+                   (char *)&timeout, sizeof(timeout)) < 0) {
+        close(sc->sock_fd);
+        ERR("set receive timeout failed");
+        return NULL;
+    }
+
+    if (setsockopt(sc->sock_fd, SOL_SOCKET, SO_SNDTIMEO,
+                   (char *)&timeout, sizeof(timeout)) < 0) {
+        close(sc->sock_fd);
+        ERR("set send timeout failed");
+        return NULL;
+    }
+
     if (0 != connect(sc->sock_fd, (struct sockaddr *)&sc->server, sizeof(sc->server))) {
         ERR("unable to connect to host");
         close(sc->sock_fd);
@@ -48,4 +66,20 @@ void free_session(session_context_t *session)
     }
 
     free(session);
+}
+
+int session_send(session_context_t *session, const void *data, size_t length)
+{
+    if ((NULL==session) || (session->sock_fd < 1)) {
+        return -1;
+    }
+    return write(session->sock_fd, data, length);
+}
+
+int session_read(session_context_t *session, void *data, size_t max_length)
+{
+    if ((NULL==session) || (session->sock_fd < 1)) {
+        return -1;
+    }
+    return read(session->sock_fd, data, max_length);
 }
