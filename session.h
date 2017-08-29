@@ -16,4 +16,6 @@ void free_session(session_context_t *session);
 int session_send(session_context_t *session, const void *data, size_t length);
 int session_read(session_context_t *session, void *data, size_t max_length);
 
+int session_init(session_context_t *session);
+
 #endif // SESSION_H

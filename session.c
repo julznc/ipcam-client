@@ -83,3 +83,24 @@ int session_read(session_context_t *session, void *data, size_t max_length)
     }
     return read(session->sock_fd, data, max_length);
 }
+
+int session_init(session_context_t *session)
+{
+    const char *req = "GET /bubble/live?ch=0&stream=0 HTTP/1.1\r\n\r\n";
+
+    int nbytes = session_send(session, req, strlen(req));
+    if (strlen(req) != (size_t)nbytes) {
+        ERR("failed to send init request");
+        return -1;
+    }
+
+    uint8_t buffer[1024];
+    nbytes = session_read(session, buffer, sizeof(buffer));
+    if (nbytes <= 0) {
+        ERR("failed to get server response");
+    }
+
+    dumpbytes(buffer, sizeof(buffer));
+
+    return 0;
+}

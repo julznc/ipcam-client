@@ -17,6 +17,11 @@ int main(int argc, char **argv)
         return -1;
     }
 
+    if (0 != session_init(session)) {
+        ERR("failed to initialize session");
+        return -1;
+    }
+
     free_session(session);
     DBG("end %s", argv[0]);
     return 0;
