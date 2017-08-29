@@ -1,6 +1,6 @@
 PROGRAM  := ipcam-client
 
-SOURCES = main.c utils.c
+SOURCES = main.c utils.c session.c
 
 CFLAGS   := -I. -Wall -O2 -g
 LFLAGS   :=
