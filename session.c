@@ -46,6 +46,14 @@ session_context_t *new_session(const char *host, const char *port)
         return NULL;
     }
 
+    int flags = 1;
+    if (setsockopt(sc->sock_fd, IPPROTO_TCP, TCP_NODELAY,
+                   &flags, sizeof(flags)) < 0) {
+        ERR("set tcp nodelay failed");
+        close(sc->sock_fd);
+        return NULL;
+    }
+
     if (0 != connect(sc->sock_fd, (struct sockaddr *)&sc->server, sizeof(sc->server))) {
         ERR("unable to connect to host");
         close(sc->sock_fd);
@@ -73,6 +81,7 @@ int session_send(session_context_t *session, const void *data, size_t length)
     if ((NULL==session) || (session->sock_fd < 1)) {
         return -1;
     }
+
     return write(session->sock_fd, data, length);
 }
 
@@ -81,7 +90,35 @@ int session_read(session_context_t *session, void *data, size_t max_length)
     if ((NULL==session) || (session->sock_fd < 1)) {
         return -1;
     }
+
     return read(session->sock_fd, data, max_length);
+}
+
+int session_read_full(session_context_t *session, void *data, size_t length)
+{
+    if ((NULL==session) || (session->sock_fd < 1)) {
+        return -1;
+    }
+
+    //DBG("read %zu bytes...", length);
+
+    size_t total_read = 0;
+    ssize_t total_left = length;
+    char *buffer_pointer = (char *)data;
+    while (total_left > 0) {
+        ssize_t current = read(session->sock_fd, buffer_pointer, total_left);
+        if (current < 0) {
+            return -1;
+        } else if (current == 0) {
+            break;
+        } else {
+            total_read += current;
+            total_left -= current;
+            buffer_pointer += current;
+        }
+    }
+
+    return total_read;
 }
 
 int session_init(session_context_t *session)

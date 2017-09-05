@@ -70,11 +70,23 @@ typedef struct _tagBubbleOpenStream{
     unsigned int uiReverse;
 } BubbleOpenStream;
 
+typedef struct _tagMediaPackData{
+    unsigned int  uiLength;      // length of pData, in network sequence
+    char          cMediaType;    // type of data, can be value of _enMediaType type
+    char          cId;           // channel number
+    char          pData[1];      // media data
+} MediaPackData;
+
 #pragma pack()
 
 
 int verify_user(session_context_t *session, const char *username, const char *password);
 
 int open_stream(session_context_t *session, unsigned int channel, unsigned int stream_id);
+
+int receive_packet(session_context_t *session, void *buffer, size_t buffer_size);
+
+int process_packet(void *packet);
+
 
 #endif // BUBBLE_H

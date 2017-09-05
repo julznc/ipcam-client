@@ -131,3 +131,83 @@ int open_stream(session_context_t *session, unsigned int channel, unsigned int s
 
     return 0;
 }
+
+int receive_packet(session_context_t *session, void *buffer, size_t buffer_size)
+{
+    if (buffer_size < PACKHEAD_SIZE) {
+        ERR("too small buffer");
+        return -1;
+    }
+
+    int nbytes = session_read(session, buffer, PACKHEAD_SIZE);
+    if (nbytes != (int)PACKHEAD_SIZE) {
+        ERR("corrupted packet header");
+        return -1;
+    }
+
+    PackHead* packhead = (PackHead*)buffer;
+    if (0x08 == packhead->cPackType) {
+        ERR("server is full");
+        return -2;
+    }
+
+    uint32_t uiPackLength = ntohl(packhead->uiLength);
+    size_t packetSize = uiPackLength + STRUCT_MEMBER_POS(PackHead, cPackType);
+    if (packetSize < PACKHEAD_SIZE) {
+        ERR("corrupted length field");
+        return -1;
+    }
+
+    if (packetSize > buffer_size) {
+        ERR("not enough buffer (%zu/%zu)", buffer_size, packetSize);
+        return -1;
+    }
+
+    size_t bytes_left = packetSize - PACKHEAD_SIZE;
+    char *recv_start = (char *)buffer + PACKHEAD_SIZE;
+
+    nbytes = session_read_full(session, recv_start, bytes_left);
+    if (nbytes != (int)bytes_left) {
+        ERR("corrupted packet data (%d/%zu)", nbytes, bytes_left);
+        return -1;
+    }
+
+    return (int)packetSize;
+}
+
+int process_packet(void *packet)
+{
+    PackHead *packhead = (PackHead *)packet;
+    uint32_t uiPackLen = ntohl(packhead->uiLength);
+    size_t packsize = packsize = uiPackLen + STRUCT_MEMBER_POS(PackHead, cPackType);
+
+    MediaPackData *media_packhead = (MediaPackData *)packhead->pData;
+    uint32_t uiMediaPackLen = ntohl(media_packhead->uiLength);
+    if (uiMediaPackLen + PACKHEAD_SIZE + STRUCT_MEMBER_POS(MediaPackData, pData) > packsize) {
+        ERR("Frame data is larger than packet size");
+        return -1;
+    }
+
+    DBG("media packet chl: %d type: %d", media_packhead->cId, media_packhead->cMediaType);
+    unsigned char *framedata = (unsigned char *)media_packhead->pData;
+    switch (media_packhead->cMediaType)
+    {
+    case MT_IDR:
+        DBG("MT_IDR");
+        dumpbytes(framedata, uiMediaPackLen);
+        break;
+    case MT_PSLICE:
+        DBG("MT_PSLICE");
+        dumpbytes(framedata, uiMediaPackLen);
+        break;
+    case MT_AUDIO:
+        DBG("MT_AUDIO");
+        dumpbytes(framedata, uiMediaPackLen);
+        break;
+    default:
+        ERR("unknown media pack type");
+        return -1;
+    }
+
+    return 0;
+}
