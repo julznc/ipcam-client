@@ -24,7 +24,12 @@ int main(int argc, char **argv)
     }
 
     if (0 != verify_user(session, argv[3], argv[4])) {
-        DBG("login failed");
+        ERR("login failed");
+    }
+
+    if (0 != open_stream(session, 0, 0))
+    {
+        ERR("failed to open stream");
     }
 
     free_session(session);

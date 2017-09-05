@@ -109,3 +109,25 @@ int verify_user(session_context_t *session, const char *username, const char *pa
 
     return recv_verify_user_result(session);
 }
+
+int open_stream(session_context_t *session, unsigned int channel, unsigned int stream_id)
+{
+    char buffer[GET_PACKSIZE(sizeof(BubbleOpenStream))];
+
+    BubbleOpenStream openStreamPack;
+    memset(&openStreamPack, 0, sizeof(BubbleOpenStream));
+    openStreamPack.uiChannel = channel;
+    openStreamPack.uiStreamId = stream_id;
+    openStreamPack.uiOpened = 1;
+
+    PackHead *packhead = write_packhead(sizeof(BubbleOpenStream), PT_OPENSTREAM, buffer);
+    memcpy(packhead->pData, &openStreamPack, sizeof(BubbleOpenStream));
+
+    int nbytes = session_send(session, buffer, sizeof(buffer));
+    if (nbytes != (int)sizeof(buffer)) {
+        ERR("Failed to send open stream packet");
+        return -1;
+    }
+
+    return 0;
+}

@@ -63,10 +63,18 @@ typedef struct _tagUserVrfB{
     char          bAuth[USER_AUTH_CNT];
 } UserVrfB;
 
+typedef struct _tagBubbleOpenStream{
+    unsigned int uiChannel;
+    unsigned int uiStreamId;
+    unsigned int uiOpened;
+    unsigned int uiReverse;
+} BubbleOpenStream;
+
 #pragma pack()
 
 
 int verify_user(session_context_t *session, const char *username, const char *password);
 
+int open_stream(session_context_t *session, unsigned int channel, unsigned int stream_id);
 
 #endif // BUBBLE_H
