@@ -86,7 +86,7 @@ int session_read(session_context_t *session, void *data, size_t max_length)
 
 int session_init(session_context_t *session)
 {
-    const char *req = "GET /bubble/live?ch=0&stream=0 HTTP/1.1\r\n\r\n";
+    const char *req = "GET /bubble/live HTTP/1.1\r\n\r\n";
 
     int nbytes = session_send(session, req, strlen(req));
     if (strlen(req) != (size_t)nbytes) {
@@ -98,9 +98,9 @@ int session_init(session_context_t *session)
     nbytes = session_read(session, buffer, sizeof(buffer));
     if (nbytes <= 0) {
         ERR("failed to get server response");
+        return -1;
     }
 
-    dumpbytes(buffer, sizeof(buffer));
-
+    //DBG("%s", buffer);
     return 0;
 }
