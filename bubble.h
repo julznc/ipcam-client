@@ -2,6 +2,7 @@
 #define BUBBLE_H
 
 #include "session.h"
+#include "media.h"
 
 #define USER_AUTH_CNT       (32)
 #define MAX_USERNAME_LEN    (20)
@@ -85,8 +86,6 @@ int verify_user(session_context_t *session, const char *username, const char *pa
 int open_stream(session_context_t *session, unsigned int channel, unsigned int stream_id);
 
 int receive_packet(session_context_t *session, void *buffer, size_t buffer_size);
-
-int process_packet(void *packet);
 
 
 #endif // BUBBLE_H
