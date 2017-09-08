@@ -35,6 +35,12 @@ media_context_t *new_media(session_context_t *session)
         return NULL;
     }
 
+    if (avcodec_open2(media->vcodecContext, media->vcodec, NULL) < 0) {
+        ERR("failed to open codec");
+        free_media(media);
+        return NULL;
+    }
+
     media->avFrame = av_frame_alloc();
     if (NULL==media->avFrame) {
         ERR("alloc av frame failed");
@@ -70,6 +76,39 @@ void free_media(media_context_t *media)
     free(media);
 }
 
+static int decode_frame(media_context_t *media, uint8_t *buffer, int size)
+{
+    //dumpbytes(buffer, size);
+
+    media->avPacket.size = size;
+    media->avPacket.data = buffer;
+
+    int error = avcodec_send_packet(media->vcodecContext, &media->avPacket);
+    if (0 != error) {
+        ERR("avcodec_send_packet failed (error=%d)", error);
+        return -1;
+    }
+
+    while (1)
+    {
+        error = avcodec_receive_frame(media->vcodecContext, media->avFrame);
+        if (error == AVERROR(EAGAIN) || error == AVERROR_EOF)
+        {
+            break;
+        }
+        if (0 != error)
+        {
+            ERR("failed to decode frame");
+            return -1;
+        }
+
+        DBG("frame w=%d h=%d", media->vcodecContext->width, media->vcodecContext->height);
+
+    }
+
+    return 0;
+}
+
 static int process_packet(media_context_t *media)
 {
     PackHead *packhead = (PackHead *)media->recvbuf;
@@ -85,16 +124,13 @@ static int process_packet(media_context_t *media)
     }
 
     //DBG("media packet chl: %d type: %d", media_packhead->cId, media_packhead->cMediaType);
-    //unsigned char *framedata = (unsigned char *)media_packhead->pData;
+    char *framedata = media_packhead->pData;
     switch (media_packhead->cMediaType)
     {
     case MT_IDR:
-        //DBG("MT_IDR");
-        //dumpbytes(framedata, uiMediaPackLen);
-        break;
+        // fall through
     case MT_PSLICE:
-        //DBG("MT_PSLICE");
-        //dumpbytes(framedata, uiMediaPackLen);
+        decode_frame(media, (unsigned char *)framedata, uiMediaPackLen);
         break;
     case MT_AUDIO:
         //DBG("MT_AUDIO");
