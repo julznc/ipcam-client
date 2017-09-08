@@ -5,6 +5,8 @@
 #include "display.h"
 #include "utils.h"
 
+#define DISPLAY_FORMAT      AV_PIX_FMT_BGR24
+
 display_context_t *new_display(unsigned int width, unsigned int height)
 {
     DBG("%s(%u, %u)", __func__, width, height);
@@ -13,6 +15,8 @@ display_context_t *new_display(unsigned int width, unsigned int height)
         ERR("failed to allocate display context");
         return NULL;
     }
+
+    memset(dc, 0, sizeof(display_context_t));
 
     dc->display = XOpenDisplay(NULL);
     if (NULL==dc->display) {
@@ -38,6 +42,24 @@ display_context_t *new_display(unsigned int width, unsigned int height)
     dc->x11_fd = ConnectionNumber(dc->display);
     //DBG("ConnectionNumber()=%d", dc->x11_fd);
 
+    dc->rgbFrame = av_frame_alloc();
+    if (NULL==dc->rgbFrame) {
+        ERR("failed to allocate RGB frame");
+        free_display(dc);
+        return NULL;
+    }
+
+    dc->rgbFrame->width = width;
+    dc->rgbFrame->height = height;
+    dc->rgbFrame->format = DISPLAY_FORMAT;
+
+    dc->prevFrame = av_frame_alloc();
+    if (NULL==dc->prevFrame) {
+        ERR("failed to allocate a temporary frame");
+        free_display(dc);
+        return NULL;
+    }
+
     return dc;
 }
 
@@ -47,10 +69,93 @@ void free_display(display_context_t *display)
         return;
     }
 
+    if (display->swsContext) {
+        sws_freeContext(display->swsContext);
+        display->swsContext = NULL;
+    }
+
+    if (display->rgbFrame) {
+        av_frame_free(&display->rgbFrame);
+        display->rgbFrame = NULL;
+    }
+
+    if (display->rgbBuffer) {
+        free(display->rgbBuffer);
+        display->rgbBuffer = NULL;
+    }
+
     if (display->display) {
         XDestroyWindow(display->display, display->window);
         XCloseDisplay(display->display);
     }
 
     free(display);
+}
+
+int init_conversion(display_context_t *display, AVFrame *src)
+{
+    if ((NULL!=display->swsContext) &&
+        (src->format==display->prevFrame->format) &&
+        (src->width==display->prevFrame->width) &&
+        (src->height==display->prevFrame->height)) {
+        //DBG("reuse");
+        return 0;
+    }
+
+    if (NULL!=display->swsContext) {
+        // free up previous
+        sws_freeContext(display->swsContext);
+    }
+
+    display->swsContext = sws_getContext(src->width, src->height, src->format,
+                                         display->rgbFrame->width,
+                                         display->rgbFrame->height,
+                                         display->rgbFrame->format,
+                                         SWS_BICUBIC, NULL, NULL, NULL);
+
+    if (NULL==display->swsContext) {
+        ERR("failed to allocate sws context");
+        return -1;
+    }
+
+    int nbytes = av_image_get_buffer_size(display->rgbFrame->format,
+                                          display->rgbFrame->width,
+                                          display->rgbFrame->height, 1);
+    display->rgbBuffer = (uint8_t *)av_malloc(nbytes);
+    if (NULL==display->rgbBuffer) {
+        ERR("failed to allocate rgb buffer");
+        sws_freeContext(display->swsContext);
+        display->swsContext = NULL;
+        return -1;
+    }
+
+    av_image_fill_arrays(display->rgbFrame->data, display->rgbFrame->linesize,
+                         display->rgbBuffer, display->rgbFrame->format,
+                         display->rgbFrame->width, display->rgbFrame->height, 1);
+
+    display->prevFrame->format = src->format;
+    display->prevFrame->width = src->width;
+    display->prevFrame->height = src->height;
+    return 0;
+}
+
+int display_frame(display_context_t *display, AVFrame *frame)
+{
+    DBG("%s(%d,%d)", __func__, frame->width, frame->height);
+
+    if (0 != init_conversion(display, frame)) {
+        return -1;
+    }
+#if 0 // fix me
+    if (0!=sws_scale(display->swsContext,
+                     frame->data,
+                     frame->linesize, 0,
+                     display->rgbFrame->height,
+                     display->rgbFrame->data,
+                     display->rgbFrame->linesize)) {
+        ERR("failed to scale image");
+        return -1;
+    }
+#endif
+    return 0;
 }

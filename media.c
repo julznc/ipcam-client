@@ -102,7 +102,9 @@ static int decode_frame(media_context_t *media, uint8_t *buffer, int size)
             return -1;
         }
 
-        DBG("frame w=%d h=%d", media->vcodecContext->width, media->vcodecContext->height);
+        //DBG("frame fmt=%d w=%d h=%d", media->avFrame->format,
+        //    media->avFrame->width, media->avFrame->height);
+        display_frame(media->display, media->avFrame);
 
     }
 
@@ -165,8 +167,8 @@ int run_media(media_context_t *media)
         FD_SET(media->session->sock_fd, &readfds);
         FD_SET(media->display->x11_fd, &readfds);
 
-        tv.tv_sec = 1;
-        tv.tv_usec = 0;
+        tv.tv_sec = 0;
+        tv.tv_usec = 50*1000;
 
         int num_ready_fds = select(max_fd + 1, &readfds, NULL, NULL, &tv);
         if (num_ready_fds < 0) {
