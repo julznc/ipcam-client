@@ -1,14 +1,14 @@
 PROGRAM  := ipcam-client
 
-SOURCES = main.c utils.c bubble.c session.c media.c
+SOURCES = main.c utils.c bubble.c session.c media.c display.c
 
 CFLAGS   := -I. -Wall -O2 -g
-LFLAGS   :=
+LFLAGS   := -L/usr/local/lib -lavcodec -lX11
 
 OBJECTS := $(patsubst %.c, %.o, $(SOURCES))
 
 all : $(OBJECTS)
-	$(CXX) -o $(PROGRAM) $^
+	$(CXX) -o $(PROGRAM) $^ $(LFLAGS)
 
 clean:
 	rm -rf *.o *.exe

@@ -1,6 +1,7 @@
 
 #include <signal.h>
 
+
 #include "bubble.h"
 #include "utils.h"
 
@@ -47,6 +48,13 @@ int main(int argc, char **argv)
         return -1;
     }
 
+    media_context_t *media = new_media(session);
+    if (NULL == media) {
+        ERR("media context not created");
+        free_session(session);
+        return -1;
+    }
+
     app_exit = 0;
     signal(SIGINT, handle_sigint);
     while (0==app_exit) {
@@ -59,7 +67,7 @@ int main(int argc, char **argv)
         }
     }
 
-
+    free_media(media);
     free_session(session);
     DBG("end %s", argv[0]);
     return 0;
