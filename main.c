@@ -5,14 +5,16 @@
 #include "bubble.h"
 #include "utils.h"
 
-static int app_exit = 0;
+session_context_t *session = NULL;
+media_context_t *media = NULL;
 
 static void handle_sigint(int signum)
 {
-    DBG("%s", __func__);
-    if (app_exit)
+    //DBG("%s(%d)", __func__, signum);
+    if (NULL==media)
         return;
-    app_exit = 1;
+
+    stop_media(media);
 }
 
 int main(int argc, char **argv)
@@ -24,7 +26,7 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    session_context_t *session = new_session(argv[1], argv[2]);
+    session = new_session(argv[1], argv[2]);
     if (NULL==session) {
         ERR("session not created");
         return -1;
@@ -48,24 +50,16 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    media_context_t *media = new_media(session);
+    media = new_media(session);
     if (NULL == media) {
         ERR("media context not created");
         free_session(session);
         return -1;
     }
 
-    app_exit = 0;
+
     signal(SIGINT, handle_sigint);
-    while (0==app_exit) {
-        unsigned char tmpbuff[512*1024 + 16];
-        int nbytes = receive_packet(session, tmpbuff, sizeof(tmpbuff));
-        if (-2 == nbytes) {
-            app_exit = 1;
-        } else if (nbytes > 0) {
-            process_packet(tmpbuff);
-        }
-    }
+    run_media(media);
 
     free_media(media);
     free_session(session);
