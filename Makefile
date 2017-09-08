@@ -3,7 +3,7 @@ PROGRAM  := ipcam-client
 SOURCES = main.c utils.c bubble.c session.c media.c display.c
 
 CFLAGS   := -I. -Wall -O2 -g
-LFLAGS   := -L/usr/local/lib -lavcodec -lX11
+LFLAGS   := -L/usr/local/lib -lavcodec -lavutil -lX11
 
 OBJECTS := $(patsubst %.c, %.o, $(SOURCES))
 

@@ -20,6 +20,29 @@ media_context_t *new_media(session_context_t *session)
     }
 
     avcodec_register_all();
+
+    media->vcodec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    if (NULL==media->vcodec) {
+        ERR("h264 codec not found");
+        free_media(media);
+        return NULL;
+    }
+
+    media->vcodecContext = avcodec_alloc_context3(media->vcodec);
+    if (NULL==media->vcodecContext) {
+        ERR("alloc av context failed");
+        free_media(media);
+        return NULL;
+    }
+
+    media->avFrame = av_frame_alloc();
+    if (NULL==media->avFrame) {
+        ERR("alloc av frame failed");
+        free_media(media);
+        return NULL;
+    }
+
+    av_init_packet(&media->avPacket);
     return media;
 }
 
@@ -29,16 +52,27 @@ void free_media(media_context_t *media)
         return;
     }
 
+    if (media->avFrame) {
+        av_frame_free(&media->avFrame);
+        media->avFrame = NULL;
+    }
+
+    if (media->vcodecContext) {
+        av_free(media->vcodecContext);
+        media->vcodecContext = NULL;
+    }
+
     if (media->display) {
         free_display(media->display);
+        media->display = NULL;
     }
 
     free(media);
 }
 
-int process_packet(void *packet)
+static int process_packet(media_context_t *media)
 {
-    PackHead *packhead = (PackHead *)packet;
+    PackHead *packhead = (PackHead *)media->recvbuf;
     uint32_t uiPackLen = ntohl(packhead->uiLength);
     size_t packsize = packsize = uiPackLen + STRUCT_MEMBER_POS(PackHead, cPackType);
 
@@ -112,7 +146,7 @@ int run_media(media_context_t *media)
             if (-2 == nbytes) {
                 media->running = 0;
             } else if (nbytes > 0) {
-                process_packet(media->recvbuf);
+                process_packet(media);
             }
         }
 
