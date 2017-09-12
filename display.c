@@ -151,7 +151,8 @@ int init_conversion(display_context_t *display, AVFrame *src)
                                          display->rgbFrame->width,
                                          display->rgbFrame->height,
                                          display->rgbFrame->format,
-                                         SWS_BICUBIC, NULL, NULL, NULL);
+                                         SWS_BICUBIC | SWS_PRINT_INFO,
+                                         NULL, NULL, NULL);
 
     if (NULL==display->swsContext) {
         ERR("failed to allocate sws context");
@@ -182,16 +183,15 @@ int init_conversion(display_context_t *display, AVFrame *src)
 
 int display_frame(display_context_t *display, AVFrame *frame)
 {
-    DBG("%s %dx%d #%u", __func__,
-        frame->width, frame->height,
-        display->frameCount);
+    //DBG("%s %dx%d #%u", __func__,
+    //    frame->width, frame->height, display->frameCount);
 
     if (0 != init_conversion(display, frame)) {
         return -1;
     }
 
     int height = sws_scale(display->swsContext,
-                           (const uint8_t * const *)frame->data,
+                           (uint8_t const* const*)frame->data,
                            frame->linesize, 0, frame->height,
                            display->rgbFrame->data,
                            display->rgbFrame->linesize);
@@ -200,26 +200,41 @@ int display_frame(display_context_t *display, AVFrame *frame)
         return -1;
     }
 
-    int screen = DefaultScreen(display->display);
-    unsigned long black = BlackPixel(display->display, screen);
-    unsigned long white = WhitePixel(display->display, screen);
+    XImage *image = XCreateImage(display->display, NULL,
+                                 DISPLAY_DEPTH, ZPixmap, 0,
+                                 (char *)display->rgbFrame->data,
+                                 display->rgbFrame->width,
+                                 display->rgbFrame->height,
+                                 8, 0);//display->rgbFrame->linesize[0]);
 
-    Pixmap pixmap = XCreatePixmapFromBitmapData(
-                display->display, display->window,
-                (char *)display->rgbFrame->data,
-                display->rgbFrame->width,
-                display->rgbFrame->height,
-                black, white, DISPLAY_DEPTH);
-
-    if (pixmap <=0) {
-        ERR("XCreatePixmapFromBitmapData() failed.");
+    if (NULL==image) {
+        ERR("XCreateImage() failed.");
         return -1;
     }
 
+    Pixmap pixmap = XCreatePixmap(display->display, display->window,
+                                  display->rgbFrame->width,
+                                  display->rgbFrame->height, DISPLAY_DEPTH);
+    if (pixmap <= 0) {
+        ERR("XCreatePixmap() failed.");
+        return -1;
+    }
+
+    XPutImage(display->display, pixmap,
+              display->gc, image, 0, 0, 0, 0,
+              display->rgbFrame->width,
+              display->rgbFrame->height);
+
     XSetWindowBackgroundPixmap(display->display,
                                display->window, pixmap);
-
     XClearWindow(display->display, display->window);
+    XSync(display->display, 0);
+
+#if 0 // will also destroy 'rgbFrame->data'!
+    XDestroyImage(image);
+#else
+    free(image);
+#endif
     XFreePixmap(display->display, pixmap);
 
     display->frameCount++;
