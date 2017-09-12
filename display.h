@@ -20,7 +20,7 @@ typedef struct display_context {
     unsigned int frameCount;
 } display_context_t;
 
-display_context_t *new_display(unsigned int width, unsigned int height);
+display_context_t *new_display(void);
 void free_display(display_context_t *display);
 
 int init_conversion(display_context_t *display, AVFrame *src);

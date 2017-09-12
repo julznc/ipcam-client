@@ -13,7 +13,7 @@ media_context_t *new_media(session_context_t *session)
     memset(media, 0, sizeof(media_context_t));
     media->session = session;
 
-    media->display = new_display(640, 360);
+    media->display = new_display();
     if (NULL==media->display) {
         free(media);
         return NULL;
@@ -167,8 +167,8 @@ int run_media(media_context_t *media)
         FD_SET(media->session->sock_fd, &readfds);
         FD_SET(media->display->x11_fd, &readfds);
 
-        tv.tv_sec = 0;
-        tv.tv_usec = 50*1000;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
 
         int num_ready_fds = select(max_fd + 1, &readfds, NULL, NULL, &tv);
         if (num_ready_fds < 0) {
@@ -192,10 +192,19 @@ int run_media(media_context_t *media)
             while(XPending(media->display->display)) {
                 XEvent event;
                 XNextEvent(media->display->display, &event);
-                //DBG("event %d", event.type);
-                if (ClientMessage == event.type) {
+                switch (event.type)
+                {
+                case ClientMessage:
                     // todo: check if "WM_DELETE_WINDOW"
                     media->running = 0;
+                    break;
+                case KeyPress:
+                    DBG("KeyPress: %x", event.xkey.keycode );
+                    media->running = 0;
+                    break;
+                default:
+                    //DBG("unhandled event %d", event.type);
+                    break;
                 }
             }
         }

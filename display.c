@@ -8,9 +8,9 @@
 
 #define DISPLAY_FORMAT      AV_PIX_FMT_RGBA
 
-display_context_t *new_display(unsigned int width, unsigned int height)
+display_context_t *new_display(void)
 {
-    DBG("%s(%u, %u)", __func__, width, height);
+    //DBG("%s()", __func__);
     display_context_t *dc = (display_context_t *)malloc(sizeof(display_context_t));
     if (NULL==dc) {
         ERR("failed to allocate display context");
@@ -27,14 +27,20 @@ display_context_t *new_display(unsigned int width, unsigned int height)
     }
 
     int screen = DefaultScreen(dc->display);
-    unsigned long black = BlackPixel(dc->display, screen);
-    unsigned long white = WhitePixel(dc->display, screen);
-
     dc->depth = DefaultDepth(dc->display, screen);
-    dc->window = XCreateSimpleWindow(dc->display,
-                                     XDefaultRootWindow(dc->display),
-                                     100, 100, width, height, 4,
-                                     white, black);
+
+    Window root = DefaultRootWindow(dc->display);
+    XWindowAttributes winAttr;
+    XGetWindowAttributes(dc->display, root, &winAttr);
+    DBG("window size %dx%d", winAttr.width, winAttr.height);
+
+    XSetWindowAttributes setAttr;
+    setAttr.override_redirect = True; // remove decorators
+    dc->window = XCreateWindow(dc->display, root,
+                               0, 0, winAttr.width, winAttr.height, 1,
+                               dc->depth, InputOutput,
+                               DefaultVisual(dc->display, screen),
+                               CWOverrideRedirect, &setAttr);
 
     if (dc->window < 0) {
         ERR("XCreateSimpleWindow() failed.");
@@ -48,9 +54,6 @@ display_context_t *new_display(unsigned int width, unsigned int height)
         free_display(dc);
         return NULL;
     }
-
-    XSetBackground(dc->display, dc->gc, white);
-    XSetForeground(dc->display, dc->gc, black);
 
     //DBG("dc->window=%lu", dc->window);
     XMapWindow(dc->display, dc->window);
@@ -72,8 +75,8 @@ display_context_t *new_display(unsigned int width, unsigned int height)
         return NULL;
     }
 
-    dc->rgbFrame->width = width;
-    dc->rgbFrame->height = height;
+    dc->rgbFrame->width = winAttr.width;
+    dc->rgbFrame->height = winAttr.height;
     dc->rgbFrame->format = DISPLAY_FORMAT;
 
     dc->prevFrame = av_frame_alloc();
@@ -226,13 +229,13 @@ int display_frame(display_context_t *dc, AVFrame *frame)
     XSetWindowBackgroundPixmap(dc->display,
                                dc->window, pixmap);
     XClearWindow(dc->display, dc->window);
-    XSync(dc->display, 0);
+    //XSync(dc->display, 0);
 
-#if 0 // will also destroy 'rgbFrame->data'!
+  #if 0 // will also destroy 'rgbFrame->data'!
     XDestroyImage(image);
-#else
+  #else
     free(image);
-#endif
+  #endif
     XFreePixmap(dc->display, pixmap);
 
     dc->frameCount++;

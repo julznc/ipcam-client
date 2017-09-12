@@ -44,7 +44,7 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    if (0 != open_stream(session, 0, 1)) {
+    if (0 != open_stream(session, 0, 0)) {
         ERR("failed to open stream");
         free_session(session);
         return -1;
