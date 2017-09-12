@@ -5,6 +5,7 @@
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 #include <X11/Xlib.h>
+#include  <X11/Xutil.h>
 
 typedef struct display_context {
     Display *display;
@@ -15,6 +16,7 @@ typedef struct display_context {
     uint8_t *rgbBuffer;
     AVFrame *rgbFrame;
     AVFrame *prevFrame;
+    unsigned int frameCount;
 } display_context_t;
 
 display_context_t *new_display(unsigned int width, unsigned int height);

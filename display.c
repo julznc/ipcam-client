@@ -1,11 +1,14 @@
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "display.h"
 #include "utils.h"
 
-#define DISPLAY_FORMAT      AV_PIX_FMT_BGR24
+//#define DISPLAY_FORMAT      AV_PIX_FMT_BGR24
+#define DISPLAY_FORMAT      AV_PIX_FMT_RGB24
+#define DISPLAY_DEPTH      24
 
 display_context_t *new_display(unsigned int width, unsigned int height)
 {
@@ -25,9 +28,16 @@ display_context_t *new_display(unsigned int width, unsigned int height)
         return NULL;
     }
 
+    int screen = DefaultScreen(dc->display);
+    assert(DISPLAY_DEPTH == DefaultDepth(dc->display, screen));
+
+    unsigned long black = BlackPixel(dc->display, screen);
+    unsigned long white = WhitePixel(dc->display, screen);
+
     dc->window = XCreateSimpleWindow(dc->display,
                                      XDefaultRootWindow(dc->display),
-                                     100, 100, width, height, 4, 0, 0);
+                                     100, 100, width, height, 4,
+                                     white, black);
 
     if (dc->window < 0) {
         ERR("XCreateSimpleWindow() failed.");
@@ -41,6 +51,9 @@ display_context_t *new_display(unsigned int width, unsigned int height)
         free_display(dc);
         return NULL;
     }
+
+    XSetBackground(dc->display, dc->gc, white);
+    XSetForeground(dc->display, dc->gc, black);
 
     //DBG("dc->window=%lu", dc->window);
     XMapWindow(dc->display, dc->window);
@@ -98,13 +111,13 @@ void free_display(display_context_t *display)
     }
 
     if (display->display) {
-        if (display->window > 0) {
-            XDestroyWindow(display->display, display->window);
-            display->window = 0;
-        }
         if (display->gc) {
             XFreeGC (display->display, display->gc);
             display->gc = NULL;
+        }
+        if (display->window > 0) {
+            XDestroyWindow(display->display, display->window);
+            display->window = 0;
         }
         XCloseDisplay(display->display);
     }
@@ -148,6 +161,7 @@ int init_conversion(display_context_t *display, AVFrame *src)
     int nbytes = av_image_get_buffer_size(display->rgbFrame->format,
                                           display->rgbFrame->width,
                                           display->rgbFrame->height, 1);
+    //DBG("buffer size = %d", nbytes);
     display->rgbBuffer = (uint8_t *)av_malloc(nbytes);
     if (NULL==display->rgbBuffer) {
         ERR("failed to allocate rgb buffer");
@@ -168,16 +182,17 @@ int init_conversion(display_context_t *display, AVFrame *src)
 
 int display_frame(display_context_t *display, AVFrame *frame)
 {
-    DBG("%s(%d,%d)", __func__, frame->width, frame->height);
+    DBG("%s %dx%d #%u", __func__,
+        frame->width, frame->height,
+        display->frameCount);
 
     if (0 != init_conversion(display, frame)) {
         return -1;
     }
 
     int height = sws_scale(display->swsContext,
-                           (const uint8_t **)frame->data,
-                           frame->linesize, 0,
-                           display->rgbFrame->height,
+                           (const uint8_t * const *)frame->data,
+                           frame->linesize, 0, frame->height,
                            display->rgbFrame->data,
                            display->rgbFrame->linesize);
     if (height <= 0) {
@@ -185,5 +200,28 @@ int display_frame(display_context_t *display, AVFrame *frame)
         return -1;
     }
 
+    int screen = DefaultScreen(display->display);
+    unsigned long black = BlackPixel(display->display, screen);
+    unsigned long white = WhitePixel(display->display, screen);
+
+    Pixmap pixmap = XCreatePixmapFromBitmapData(
+                display->display, display->window,
+                (char *)display->rgbFrame->data,
+                display->rgbFrame->width,
+                display->rgbFrame->height,
+                black, white, DISPLAY_DEPTH);
+
+    if (pixmap <=0) {
+        ERR("XCreatePixmapFromBitmapData() failed.");
+        return -1;
+    }
+
+    XSetWindowBackgroundPixmap(display->display,
+                               display->window, pixmap);
+
+    XClearWindow(display->display, display->window);
+    XFreePixmap(display->display, pixmap);
+
+    display->frameCount++;
     return 0;
 }
