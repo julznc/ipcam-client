@@ -29,6 +29,19 @@ display_context_t *new_display(unsigned int width, unsigned int height)
                                      XDefaultRootWindow(dc->display),
                                      100, 100, width, height, 4, 0, 0);
 
+    if (dc->window < 0) {
+        ERR("XCreateSimpleWindow() failed.");
+        free_display(dc);
+        return NULL;
+    }
+
+    dc->gc = XCreateGC(dc->display, dc->window, 0, NULL);
+    if (NULL==dc->gc) {
+        ERR("XCreateGC() failed.");
+        free_display(dc);
+        return NULL;
+    }
+
     //DBG("dc->window=%lu", dc->window);
     XMapWindow(dc->display, dc->window);
     XFlush(dc->display);
@@ -85,7 +98,14 @@ void free_display(display_context_t *display)
     }
 
     if (display->display) {
-        XDestroyWindow(display->display, display->window);
+        if (display->window > 0) {
+            XDestroyWindow(display->display, display->window);
+            display->window = 0;
+        }
+        if (display->gc) {
+            XFreeGC (display->display, display->gc);
+            display->gc = NULL;
+        }
         XCloseDisplay(display->display);
     }
 
@@ -98,13 +118,20 @@ int init_conversion(display_context_t *display, AVFrame *src)
         (src->format==display->prevFrame->format) &&
         (src->width==display->prevFrame->width) &&
         (src->height==display->prevFrame->height)) {
-        //DBG("reuse");
+        //DBG("reused");
         return 0;
     }
 
     if (NULL!=display->swsContext) {
         // free up previous
         sws_freeContext(display->swsContext);
+        display->swsContext = NULL;
+    }
+
+    if (NULL!=display->rgbBuffer) {
+        // free up previous
+        free(display->rgbBuffer);
+        display->rgbBuffer = NULL;
     }
 
     display->swsContext = sws_getContext(src->width, src->height, src->format,
@@ -146,16 +173,17 @@ int display_frame(display_context_t *display, AVFrame *frame)
     if (0 != init_conversion(display, frame)) {
         return -1;
     }
-#if 0 // fix me
-    if (0!=sws_scale(display->swsContext,
-                     frame->data,
-                     frame->linesize, 0,
-                     display->rgbFrame->height,
-                     display->rgbFrame->data,
-                     display->rgbFrame->linesize)) {
+
+    int height = sws_scale(display->swsContext,
+                           (const uint8_t **)frame->data,
+                           frame->linesize, 0,
+                           display->rgbFrame->height,
+                           display->rgbFrame->data,
+                           display->rgbFrame->linesize);
+    if (height <= 0) {
         ERR("failed to scale image");
         return -1;
     }
-#endif
+
     return 0;
 }

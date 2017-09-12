@@ -9,6 +9,7 @@
 typedef struct display_context {
     Display *display;
     Window window;
+    GC gc;
     int x11_fd;
     struct SwsContext *swsContext;
     uint8_t *rgbBuffer;
