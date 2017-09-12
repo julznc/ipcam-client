@@ -6,9 +6,7 @@
 #include "display.h"
 #include "utils.h"
 
-//#define DISPLAY_FORMAT      AV_PIX_FMT_BGR24
-#define DISPLAY_FORMAT      AV_PIX_FMT_RGB24
-#define DISPLAY_DEPTH      24
+#define DISPLAY_FORMAT      AV_PIX_FMT_RGBA
 
 display_context_t *new_display(unsigned int width, unsigned int height)
 {
@@ -29,11 +27,10 @@ display_context_t *new_display(unsigned int width, unsigned int height)
     }
 
     int screen = DefaultScreen(dc->display);
-    assert(DISPLAY_DEPTH == DefaultDepth(dc->display, screen));
-
     unsigned long black = BlackPixel(dc->display, screen);
     unsigned long white = WhitePixel(dc->display, screen);
 
+    dc->depth = DefaultDepth(dc->display, screen);
     dc->window = XCreateSimpleWindow(dc->display,
                                      XDefaultRootWindow(dc->display),
                                      100, 100, width, height, 4,
@@ -89,154 +86,155 @@ display_context_t *new_display(unsigned int width, unsigned int height)
     return dc;
 }
 
-void free_display(display_context_t *display)
+void free_display(display_context_t *dc)
 {
-    if (NULL==display) {
+    if (NULL==dc) {
         return;
     }
 
-    if (display->swsContext) {
-        sws_freeContext(display->swsContext);
-        display->swsContext = NULL;
+    if (dc->swsContext) {
+        sws_freeContext(dc->swsContext);
+        dc->swsContext = NULL;
     }
 
-    if (display->rgbFrame) {
-        av_frame_free(&display->rgbFrame);
-        display->rgbFrame = NULL;
+    if (dc->rgbFrame) {
+        av_frame_free(&dc->rgbFrame);
+        dc->rgbFrame = NULL;
     }
 
-    if (display->rgbBuffer) {
-        free(display->rgbBuffer);
-        display->rgbBuffer = NULL;
+    if (dc->rgbBuffer) {
+        free(dc->rgbBuffer);
+        dc->rgbBuffer = NULL;
     }
 
-    if (display->display) {
-        if (display->gc) {
-            XFreeGC (display->display, display->gc);
-            display->gc = NULL;
+    if (dc->display) {
+        if (dc->gc) {
+            XFreeGC (dc->display, dc->gc);
+            dc->gc = NULL;
         }
-        if (display->window > 0) {
-            XDestroyWindow(display->display, display->window);
-            display->window = 0;
+        if (dc->window > 0) {
+            XDestroyWindow(dc->display, dc->window);
+            dc->window = 0;
         }
-        XCloseDisplay(display->display);
+        XCloseDisplay(dc->display);
     }
 
-    free(display);
+    free(dc);
 }
 
-int init_conversion(display_context_t *display, AVFrame *src)
+int init_conversion(display_context_t *dc, AVFrame *src)
 {
-    if ((NULL!=display->swsContext) &&
-        (src->format==display->prevFrame->format) &&
-        (src->width==display->prevFrame->width) &&
-        (src->height==display->prevFrame->height)) {
+    if ((NULL!=dc->swsContext) &&
+        (src->format==dc->prevFrame->format) &&
+        (src->width==dc->prevFrame->width) &&
+        (src->height==dc->prevFrame->height)) {
         //DBG("reused");
         return 0;
     }
 
-    if (NULL!=display->swsContext) {
+    if (NULL!=dc->swsContext) {
         // free up previous
-        sws_freeContext(display->swsContext);
-        display->swsContext = NULL;
+        sws_freeContext(dc->swsContext);
+        dc->swsContext = NULL;
     }
 
-    if (NULL!=display->rgbBuffer) {
+    if (NULL!=dc->rgbBuffer) {
         // free up previous
-        free(display->rgbBuffer);
-        display->rgbBuffer = NULL;
+        free(dc->rgbBuffer);
+        dc->rgbBuffer = NULL;
     }
 
-    display->swsContext = sws_getContext(src->width, src->height, src->format,
-                                         display->rgbFrame->width,
-                                         display->rgbFrame->height,
-                                         display->rgbFrame->format,
+    dc->swsContext = sws_getContext(src->width, src->height, src->format,
+                                         dc->rgbFrame->width,
+                                         dc->rgbFrame->height,
+                                         dc->rgbFrame->format,
                                          SWS_BICUBIC | SWS_PRINT_INFO,
                                          NULL, NULL, NULL);
 
-    if (NULL==display->swsContext) {
+    if (NULL==dc->swsContext) {
         ERR("failed to allocate sws context");
         return -1;
     }
 
-    int nbytes = av_image_get_buffer_size(display->rgbFrame->format,
-                                          display->rgbFrame->width,
-                                          display->rgbFrame->height, 1);
+    int nbytes = av_image_get_buffer_size(dc->rgbFrame->format,
+                                          dc->rgbFrame->width,
+                                          dc->rgbFrame->height, 1);
     //DBG("buffer size = %d", nbytes);
-    display->rgbBuffer = (uint8_t *)av_malloc(nbytes);
-    if (NULL==display->rgbBuffer) {
+    dc->rgbBuffer = (uint8_t *)av_malloc(nbytes);
+    if (NULL==dc->rgbBuffer) {
         ERR("failed to allocate rgb buffer");
-        sws_freeContext(display->swsContext);
-        display->swsContext = NULL;
+        sws_freeContext(dc->swsContext);
+        dc->swsContext = NULL;
         return -1;
     }
 
-    av_image_fill_arrays(display->rgbFrame->data, display->rgbFrame->linesize,
-                         display->rgbBuffer, display->rgbFrame->format,
-                         display->rgbFrame->width, display->rgbFrame->height, 1);
+    av_image_fill_arrays(dc->rgbFrame->data, dc->rgbFrame->linesize,
+                         dc->rgbBuffer, dc->rgbFrame->format,
+                         dc->rgbFrame->width, dc->rgbFrame->height, 1);
 
-    display->prevFrame->format = src->format;
-    display->prevFrame->width = src->width;
-    display->prevFrame->height = src->height;
+    dc->prevFrame->format = src->format;
+    dc->prevFrame->width = src->width;
+    dc->prevFrame->height = src->height;
     return 0;
 }
 
-int display_frame(display_context_t *display, AVFrame *frame)
+int display_frame(display_context_t *dc, AVFrame *frame)
 {
     //DBG("%s %dx%d #%u", __func__,
-    //    frame->width, frame->height, display->frameCount);
+    //    frame->width, frame->height, dc->frameCount);
 
-    if (0 != init_conversion(display, frame)) {
+    if (0 != init_conversion(dc, frame)) {
         return -1;
     }
 
-    int height = sws_scale(display->swsContext,
+    int height = sws_scale(dc->swsContext,
                            (uint8_t const* const*)frame->data,
                            frame->linesize, 0, frame->height,
-                           display->rgbFrame->data,
-                           display->rgbFrame->linesize);
+                           dc->rgbFrame->data,
+                           dc->rgbFrame->linesize);
     if (height <= 0) {
         ERR("failed to scale image");
         return -1;
     }
 
-    XImage *image = XCreateImage(display->display, NULL,
-                                 DISPLAY_DEPTH, ZPixmap, 0,
-                                 (char *)display->rgbFrame->data,
-                                 display->rgbFrame->width,
-                                 display->rgbFrame->height,
-                                 8, 0);//display->rgbFrame->linesize[0]);
+    XImage *image = XCreateImage(dc->display, NULL,
+                                 dc->depth, ZPixmap, 0,
+                                 (char *)dc->rgbFrame->data[0],
+                                 dc->rgbFrame->width,
+                                 dc->rgbFrame->height,
+                                 8, 0);
 
     if (NULL==image) {
         ERR("XCreateImage() failed.");
         return -1;
     }
 
-    Pixmap pixmap = XCreatePixmap(display->display, display->window,
-                                  display->rgbFrame->width,
-                                  display->rgbFrame->height, DISPLAY_DEPTH);
+    Pixmap pixmap = XCreatePixmap(dc->display, dc->window,
+                                  dc->rgbFrame->width,
+                                  dc->rgbFrame->height,
+                                  dc->depth);
     if (pixmap <= 0) {
         ERR("XCreatePixmap() failed.");
         return -1;
     }
 
-    XPutImage(display->display, pixmap,
-              display->gc, image, 0, 0, 0, 0,
-              display->rgbFrame->width,
-              display->rgbFrame->height);
+    XPutImage(dc->display, pixmap,
+              dc->gc, image, 0, 0, 0, 0,
+              dc->rgbFrame->width,
+              dc->rgbFrame->height);
 
-    XSetWindowBackgroundPixmap(display->display,
-                               display->window, pixmap);
-    XClearWindow(display->display, display->window);
-    XSync(display->display, 0);
+    XSetWindowBackgroundPixmap(dc->display,
+                               dc->window, pixmap);
+    XClearWindow(dc->display, dc->window);
+    XSync(dc->display, 0);
 
 #if 0 // will also destroy 'rgbFrame->data'!
     XDestroyImage(image);
 #else
     free(image);
 #endif
-    XFreePixmap(display->display, pixmap);
+    XFreePixmap(dc->display, pixmap);
 
-    display->frameCount++;
+    dc->frameCount++;
     return 0;
 }

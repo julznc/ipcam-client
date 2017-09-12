@@ -139,7 +139,7 @@ int receive_packet(session_context_t *session, void *buffer, size_t buffer_size)
         return -1;
     }
 
-    int nbytes = session_read(session, buffer, PACKHEAD_SIZE);
+    int nbytes = session_read_full(session, buffer, PACKHEAD_SIZE);
     if (nbytes != (int)PACKHEAD_SIZE) {
         ERR("corrupted packet header");
         return -1;

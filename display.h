@@ -12,6 +12,7 @@ typedef struct display_context {
     Window window;
     GC gc;
     int x11_fd;
+    int depth;
     struct SwsContext *swsContext;
     uint8_t *rgbBuffer;
     AVFrame *rgbFrame;
